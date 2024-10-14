@@ -1,0 +1,115 @@
+import numpy as np
+import os
+import keras
+!git clone https://github.com/RishiNandha/AWS_Dataset
+from keras.applications.mobilenet_v2 import MobileNetV2
+from imageio import imread
+from skimage.transform import resize
+from matplotlib.pyplot import imshow
+from keras.applications.mobilenet_v2 import preprocess_input
+objects = {"wood":[1,0,0,0,0,0],"glass":[0,1,0,0,0,0],"metal":[0,0,1,0,0,0],"paper":[0,0,0,1,0,0],"plastic":[0,0,0,0,1,0],"mixed":[0,0,0,0,0,1]}
+total_objects=0
+for o in objects:
+  for imgs in os.scandir('AWS_Dataset/Dataset/{}'.format(o)):
+    total_objects += 1
+total_objects
+data = np.empty((3000,224,224,3))
+out = np.empty((3000,6))
+vdata = np.empty((600,224,224,3))
+vout = np.empty((600,6))
+print(data)
+print(data.shape)
+
+  print("using data set")
+  i=0
+  n=0
+  s=0
+  for o in objects:
+    n+=1
+    print(o)
+    print(n)
+    for imgs in os.scandir('AWS_Dataset/Dataset/{}'.format(o)):
+      im = imread(imgs.path)
+      im = preprocess_input(im)
+      im = resize(im,output_shape=(224, 224))
+      if im.shape == (224,224):
+        img_array_expanded = np.expand_dims(im, axis=-1)
+        im3 = np.repeat(img_array_expanded, 3, axis=-1)
+      else:
+        im3 = im
+
+      if(s<n*100):
+        vdata[s] = im3[:,:,:3]
+        vout[s] = objects[o]
+        s+=1
+      elif(i<n*500):
+
+        data[i] = im3[:,:,:3]
+        out[i] = objects[o]
+
+        i+=1
+
+im.shape
+model = MobileNetV2(weights = 'imagenet')
+
+from tensorflow.keras import layers, Model
+from keras.layers import Dense
+from tensorflow.keras.losses import categorical_crossentropy
+from tensorflow.keras.optimizers import Adam
+aws = Dense(6, activation='softmax')
+aws = aws(model.layers[-2].output)
+from keras import Model
+aws_input = model.input
+aws_model = Model(inputs = aws_input, outputs=aws)
+for layer in aws_model.layers[:-4]:
+    layer.trainable = False
+optimizer = Adam(learning_rate=0.009)
+aws_model.compile(
+    optimizer=optimizer,
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+checkpoint = keras.callbacks.ModelCheckpoint('ckpt.keras',monitor = 'val_accuracy', verbose = 1, save_best_only=True, mode ='max')
+
+stop = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 10)
+try:
+ aws_model.load_weights('ckpt.keras')
+except:print('creating new')
+
+
+aws_model.fit(x = data, y = out,verbose=2,validation_data=(vdata,vout),batch_size=40,epochs=10,callbacks = [checkpoint,stop])
+del data
+del out
+import gc
+gc.collect()
+predictions=aws_model.predict(vdata)
+Ob=[[1,0,0,0,0,0] ,[0,1,0,0,0,0],[0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]]
+for t in range(0,600):
+  predictions[t]=Ob[np.argmax(predictions[t])]
+from sklearn.metrics import f1_score
+print(f1_score(vout,predictions,average=None))
+#keras.backend.set_value(aws_model.optimizer.learning_rate, 0.005)
+#aws_model.fit(x = data, y = out ,verbose=2,validation_data=(vdata,vout),initial_epoch=5,epochs=15,callbacks = [checkpoint,stop])
+
+mismatch = np.zeros(6,)
+l=0
+pos = 0;
+for prediction in predictions:
+  if np.argmax(prediction) != np.argmax(vout[l]):
+    mismatch[np.argmax(vout[l])] += 1
+    print(predictions[l]);
+  l+=1
+aws_model.save('aws_model')
+aws_model.summary()
+mismatch
+vout[301]
+import shutil
+from google.colab import files
+
+# Compress the saved model directory
+shutil.make_archive('aws_model', 'zip', 'aws_model')
+
+# Download the zipped model file
+files.download('aws_model.zip')
+
+
