@@ -1,3 +1,4 @@
+//upload in arduino board
 #include <Servo.h>
 
 Servo myservo; 
