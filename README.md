@@ -6,4 +6,4 @@ DC Mini-Project for the 23-24 tenure.
 <img src="./all_dcs.png">
 
 ### Working on the Automatic Waste Segregator
-<img src="./aws_building.png">
+<img src="./aws_building.jpeg">
